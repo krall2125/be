@@ -91,8 +91,9 @@ int main(int argc, char **argv) {
 		// probbaly can close it here
 		fclose(file);
 	}
-
-	fprintf(stderr, "Couldn't open file %s. Proceeding anyway.\n", argv[1]);
+	else {
+		fprintf(stderr, "Couldn't open file %s. Proceeding anyway.\n", argv[1]);
+	}
 
 	int pos = 0;
 	int line = 1;
@@ -153,16 +154,20 @@ int main(int argc, char **argv) {
 				continue;
 			}
 
-			r += 8;
-			char *temp = realloc(maballs, s);
-			if (!temp) {
-				fprintf(stderr, "Could not write byte to file: memory reallocation error.\n");
-				free(maballs);
-				fclose(file);
-				return 1;
+			// probably dumb to make the string 8 bytes larger for every byte you want to insert
+			if (pos >= r) {
+				r += 8;
+				char *temp = realloc(maballs, s);
+				if (!temp) {
+					fprintf(stderr, "Could not write byte to file: memory reallocation error.\n");
+					free(maballs);
+					return 1;
+				}
+
+				maballs = temp;
 			}
 
-			maballs = temp;
+			if (num == 10) line++;
 
 			char ch = num;
 			for (int i = pos; i < r; i++) {
@@ -170,6 +175,8 @@ int main(int argc, char **argv) {
 				maballs[i] = ch;
 				ch = temp;
 			}
+
+			pos++;
 			continue;
 		}
 
@@ -203,6 +210,14 @@ int main(int argc, char **argv) {
 			}
 			fprintf(file, "%s", maballs);
 			fclose(file);
+			break;
+		case 'a': {
+			int result = nextline(maballs, &pos, &line);
+			if (result == 0) line--;
+			printf("MODE :: INSERT\n");
+			mode = M_INSERT;
+			break;
+		}
 		}
 
 		if (c == 'q') break;
