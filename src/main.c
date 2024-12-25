@@ -54,28 +54,45 @@ char *getmaballs(sstr_t *str, int line) {
 	return t;
 }
 
+char *addressma(const char *str, int line) {
+	int linec = 1;
+	for (int i = 0; i < strlen(str); i++) {
+		if (str[i] == '\n') linec++;
+		if (linec == line) {
+			return (char *) &str[i];
+		}
+	}
+
+	return NULL;
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) {
 		fprintf(stderr, "No filename/more than one filename specified.\n");
 		return 1;
 	}
 
-	FILE *file = fopen(argv[1], "a+");
+	// this can be just reading
+	FILE *file = fopen(argv[1], "r");
 
-	if (file == NULL) {
-		fprintf(stderr, "Couldn't open file %s.\n", argv[1]);
-		return 1;
+	char *maballs = malloc(1);
+	size_t r = 1, s = 1;
+	if (file != NULL) {
+		fseek(file, 0L, SEEK_END);
+
+		s = ftell(file);
+		rewind(file);
+
+		maballs = realloc(maballs, s + 1);
+
+		r = fread(maballs, sizeof(char), s, file);
+		maballs[r] = '\0';
+
+		// probbaly can close it here
+		fclose(file);
 	}
 
-	fseek(file, 0L, SEEK_END);
-
-	size_t s = ftell(file);
-	rewind(file);
-
-	char *maballs = malloc(s + 1);
-
-	size_t r = fread(maballs, sizeof(char), s, file);
-	maballs[r] = '\0';
+	fprintf(stderr, "Couldn't open file %s. Proceeding anyway.\n", argv[1]);
 
 	int pos = 0;
 	int line = 1;
@@ -86,15 +103,45 @@ int main(int argc, char **argv) {
 	while (1) {
 		while (pending == CMD_SUBSTITUTE) {
 			uint8_t b = 0, b2 = 0;
-			uint16_t count = 0;
+			uint16_t count = 1, start = 0;
 			scanf("/");
 			scanf("%" SCNu8, &b);
 			scanf("/");
 			scanf("%" SCNu8, &b2);
 			scanf("/");
 			scanf("%" SCNu16, &count);
+			scanf("/");
+			scanf("%" SCNu16, &start);
 
-			printf("s\\%d\\%d\n", b, b2);
+			int replaced = 0;
+
+			char *pch = addressma(maballs, line);
+			int pos = 0;
+
+			for (; pch[pos] != '\n' && pch[pos] != '\0'; pos++);
+
+			for (int i = 0; i < start; i++) {
+				pch = strchr(pch, b);
+				if (pch == NULL) {
+					break;
+				}
+				pch++;
+			}
+
+			if (pch == NULL) {
+				pending = CMD_NONE;
+				break;
+			}
+
+			for (int i = 0; i < count; i++) {
+				*pch = b2;
+
+				pch = strchr(++pch, b);
+				if (pch == NULL) {
+					break;
+				}
+			}
+
 			pending = CMD_NONE;
 		}
 		if (mode == M_INSERT) {
@@ -142,15 +189,20 @@ int main(int argc, char **argv) {
 		case 'k':
 			prevline(maballs, &pos, &line);
 			break;
-		case 'p': { // fuck you C23 my cock is a c23 extension
-			  // since fucking when can'þ you declare variables in this shit
-			  // i have to put fucing block
+		case 'p': {
 			sstr_t super_mega_string = from_cstr(maballs);
 			char *l = getmaballs(&super_mega_string, line);
 			printf("%s\n", l);
 			sfree(&super_mega_string);
 			break;
 		}
+		case 'w':
+			file = fopen(argv[1], "w");
+			if (file == NULL) {
+				printf("Couldn't open file for whatever reason.\n");
+			}
+			fprintf(file, "%s", maballs);
+			fclose(file);
 		}
 
 		if (c == 'q') break;
@@ -159,5 +211,4 @@ int main(int argc, char **argv) {
 	}
 
 	free(maballs);
-	fclose(file);
 }
