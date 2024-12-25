@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 	bcmd pending = CMD_NONE;
 
 	while (1) {
-		while (pending == CMD_SUBSTITUTE) {
+		if (pending == CMD_SUBSTITUTE) {
 			uint8_t b = 0, b2 = 0;
 			uint16_t count = 1, start = 0;
 			scanf("/");
@@ -113,6 +113,8 @@ int main(int argc, char **argv) {
 			scanf("%" SCNu16, &count);
 			scanf("/");
 			scanf("%" SCNu16, &start);
+
+			printf("substituting %d '%c' bytes (starting from #%d) with '%c'\n", count, b, start, b2);
 
 			int replaced = 0;
 
@@ -144,6 +146,8 @@ int main(int argc, char **argv) {
 			}
 
 			pending = CMD_NONE;
+			// Enqueue a print line instruction to show the result of the replacement
+			ungetc('p', stdin);
 		}
 		if (mode == M_INSERT) {
 			uint8_t num = 0;
@@ -208,7 +212,8 @@ int main(int argc, char **argv) {
 			if (file == NULL) {
 				printf("Couldn't open file for whatever reason.\n");
 			}
-			fprintf(file, "%s", maballs);
+			int bwritten = fprintf(file, "%s", maballs);
+			printf("%s: Written %dB.\n", argv[1], bwritten);
 			fclose(file);
 			break;
 		case 'a': {

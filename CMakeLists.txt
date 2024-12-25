@@ -8,3 +8,5 @@ project(be VERSION 1.0)
 add_executable(be src/main.c)
 
 target_include_directories(be PRIVATE ./include/)
+
+install(TARGETS be DESTINATION bin)
