@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
 			// probably dumb to make the string 8 bytes larger for every byte you want to insert
 			if (pos >= r) {
 				r += 8;
-				char *temp = realloc(maballs, s);
+				char *temp = realloc(maballs, r);
 				if (!temp) {
 					fprintf(stderr, "Could not write byte to file: memory reallocation error.\n");
 					free(maballs);
@@ -169,6 +169,7 @@ int main(int argc, char **argv) {
 				}
 
 				maballs = temp;
+				maballs[r - 8] = '\0';
 			}
 
 			if (num == 10) line++;
