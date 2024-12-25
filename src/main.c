@@ -8,6 +8,7 @@
 typedef enum bemode {
 	M_CMD,
 	M_INSERT,
+	M_ASCII,
 } bmode;
 
 typedef enum cmd {
@@ -66,6 +67,87 @@ char *addressma(const char *str, int line) {
 	return NULL;
 }
 
+void substitute(char *maballs, int line, bcmd *pending) {
+	uint8_t b = 0, b2 = 0;
+	uint16_t count = 1, start = 0;
+	scanf("/");
+	scanf("%" SCNu8, &b);
+	scanf("/");
+	scanf("%" SCNu8, &b2);
+	scanf("/");
+	scanf("%" SCNu16, &count);
+	scanf("/");
+	scanf("%" SCNu16, &start);
+
+	printf("substituting %d '%c' bytes (starting from #%d) with '%c'\n", count, b, start, b2);
+
+	int replaced = 0;
+
+	char *pch = addressma(maballs, line);
+	int pos = 0;
+
+	for (; pch[pos] != '\n' && pch[pos] != '\0'; pos++);
+
+	for (int i = 0; i < start; i++) {
+		pch = strchr(pch, b);
+		if (pch == NULL) {
+			break;
+		}
+		pch++;
+	}
+
+	if (pch == NULL) {
+		*pending = CMD_NONE;
+	}
+
+	for (int i = 0; i < count; i++) {
+		*pch = b2;
+
+		pch = strchr(++pch, b);
+		if (pch == NULL) {
+			break;
+		}
+	}
+
+	*pending = CMD_NONE;
+	// Enqueue a print line instruction to show the result of the replacement
+	ungetc('p', stdin);
+}
+
+int insert_char(uint8_t num, int *pos, size_t *r, char **maballs, int *line, bmode *mode) {
+	if (num == 0) {
+		printf("MODE :: CMD\n");
+		*mode = M_CMD;
+		return 0;
+	}
+
+	// probably dumb to make the string 8 bytes larger for every byte you want to insert
+	if (*pos >= *r) {
+		*r += 8;
+		char *temp = realloc(*maballs, *r);
+		if (temp == NULL) {
+			fprintf(stderr, "Could not write byte to file: memory reallocation error.\n");
+			free(*maballs);
+			return 1;
+		}
+
+		*maballs = temp;
+		(*maballs)[*r - 8] = '\0';
+	}
+
+	if (num == 10) line++;
+
+	char ch = num;
+	for (int i = *pos; i < *r; i++) {
+		char temp = (*maballs)[i];
+		(*maballs)[i] = ch;
+		ch = temp;
+	}
+
+	(*pos)++;
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) {
 		fprintf(stderr, "No filename/more than one filename specified.\n");
@@ -91,9 +173,7 @@ int main(int argc, char **argv) {
 		// probbaly can close it here
 		fclose(file);
 	}
-	else {
-		fprintf(stderr, "Couldn't open file %s. Proceeding anyway.\n", argv[1]);
-	}
+	printf("%s %luB\n", argv[1], r);
 
 	int pos = 0;
 	int line = 1;
@@ -103,95 +183,36 @@ int main(int argc, char **argv) {
 
 	while (1) {
 		if (pending == CMD_SUBSTITUTE) {
-			uint8_t b = 0, b2 = 0;
-			uint16_t count = 1, start = 0;
-			scanf("/");
-			scanf("%" SCNu8, &b);
-			scanf("/");
-			scanf("%" SCNu8, &b2);
-			scanf("/");
-			scanf("%" SCNu16, &count);
-			scanf("/");
-			scanf("%" SCNu16, &start);
-
-			printf("substituting %d '%c' bytes (starting from #%d) with '%c'\n", count, b, start, b2);
-
-			int replaced = 0;
-
-			char *pch = addressma(maballs, line);
-			int pos = 0;
-
-			for (; pch[pos] != '\n' && pch[pos] != '\0'; pos++);
-
-			for (int i = 0; i < start; i++) {
-				pch = strchr(pch, b);
-				if (pch == NULL) {
-					break;
-				}
-				pch++;
-			}
-
-			if (pch == NULL) {
-				pending = CMD_NONE;
-				break;
-			}
-
-			for (int i = 0; i < count; i++) {
-				*pch = b2;
-
-				pch = strchr(++pch, b);
-				if (pch == NULL) {
-					break;
-				}
-			}
-
-			pending = CMD_NONE;
-			// Enqueue a print line instruction to show the result of the replacement
-			ungetc('p', stdin);
+			substitute(maballs, line, &pending);
 		}
 		if (mode == M_INSERT) {
 			uint8_t num = 0;
 			scanf("%" SCNu8, &num);
-			if (num == 0) {
-				printf("MODE :: CMD\n");
-				mode = M_CMD;
-				continue;
-			}
-
-			// probably dumb to make the string 8 bytes larger for every byte you want to insert
-			if (pos >= r) {
-				r += 8;
-				char *temp = realloc(maballs, r);
-				if (!temp) {
-					fprintf(stderr, "Could not write byte to file: memory reallocation error.\n");
-					free(maballs);
-					return 1;
-				}
-
-				maballs = temp;
-				maballs[r - 8] = '\0';
-			}
-
-			if (num == 10) line++;
-
-			char ch = num;
-			for (int i = pos; i < r; i++) {
-				char temp = maballs[i];
-				maballs[i] = ch;
-				ch = temp;
-			}
-
-			pos++;
+			int res = insert_char(num, &pos, &r, &maballs, &line, &mode);
+			if (res == 1) return 1;
+			continue;
+		}
+		else if (mode == M_ASCII) {
+			uint8_t chr = getc(stdin);
+			if (chr == 27) chr = 0;
+			int res = insert_char(chr, &pos, &r, &maballs, &line, &mode);
+			if (res == 1) return 1;
 			continue;
 		}
 
 		char c = getc(stdin);
 
 		switch (c) {
-		case 'i':
+		case 'i': {
+			char *cur_line_addr = addressma(maballs, line);
+			if (cur_line_addr == NULL) {
+				pos = 0;
+			}
+			pos = cur_line_addr - maballs;
 			printf("MODE :: INSERT\n");
 			mode = M_INSERT;
 			break;
+		}
 		case 's':
 			pending = CMD_SUBSTITUTE;
 			break;
@@ -204,7 +225,7 @@ int main(int argc, char **argv) {
 		case 'p': {
 			sstr_t super_mega_string = from_cstr(maballs);
 			char *l = getmaballs(&super_mega_string, line);
-			printf("%s\n", l);
+			if (l != NULL) printf("%s\n", l);
 			sfree(&super_mega_string);
 			break;
 		}
@@ -214,7 +235,7 @@ int main(int argc, char **argv) {
 				printf("Couldn't open file for whatever reason.\n");
 			}
 			int bwritten = fprintf(file, "%s", maballs);
-			printf("%s: Written %dB.\n", argv[1], bwritten);
+			printf("%s %dB\n", argv[1], bwritten);
 			fclose(file);
 			break;
 		case 'a': {
@@ -223,6 +244,11 @@ int main(int argc, char **argv) {
 			printf("MODE :: INSERT\n");
 			mode = M_INSERT;
 			break;
+		}
+		case 'I': {
+			printf("MODE :: ASCII\n");
+			mode = M_ASCII;
+			getc(stdin);
 		}
 		}
 
