@@ -114,11 +114,18 @@ void substitute(char *maballs, int line, bcmd *pending) {
 	ungetc('p', stdin);
 }
 
-int insert_char(uint8_t num, int *pos, size_t *r, char **maballs, int *line, bmode *mode) {
+int insert_char(uint8_t num, int *pos, size_t *r, char **maballs, int *line, bmode *mode, size_t *malen) {
 	if (num == 0) {
-		printf("MODE :: CMD\n");
-		*mode = M_CMD;
-		return 0;
+		printf("Do you wish to enter command mode? [y/n] ");
+		char c = getc(stdin);
+
+		getc(stdin);
+
+		if (c == 'y') {
+			printf("MODE :: CMD\n");
+			*mode = M_CMD;
+			return 0;
+		}
 	}
 
 	// probably dumb to make the string 8 bytes larger for every byte you want to insert
@@ -133,7 +140,10 @@ int insert_char(uint8_t num, int *pos, size_t *r, char **maballs, int *line, bmo
 
 		*maballs = temp;
 		(*maballs)[*r - 8] = '\0';
+		*malen = (*r) - 7;
 	}
+
+	(*malen)++;
 
 	if (num == 10) line++;
 
@@ -159,6 +169,7 @@ int main(int argc, char **argv) {
 
 	char *maballs = malloc(1);
 	size_t r = 1, s = 1;
+	size_t maballslen = 1;
 	if (file != NULL) {
 		fseek(file, 0L, SEEK_END);
 
@@ -168,6 +179,7 @@ int main(int argc, char **argv) {
 		maballs = realloc(maballs, s + 1);
 
 		r = fread(maballs, sizeof(char), s, file);
+		maballslen = r;
 		maballs[r] = '\0';
 
 		// probbaly can close it here
@@ -186,16 +198,16 @@ int main(int argc, char **argv) {
 			substitute(maballs, line, &pending);
 		}
 		if (mode == M_INSERT) {
-			uint8_t num = 0;
-			scanf("%" SCNu8, &num);
-			int res = insert_char(num, &pos, &r, &maballs, &line, &mode);
+			int8_t num = 0;
+			scanf("%" SCNi8, &num);
+			int res = insert_char(num, &pos, &r, &maballs, &line, &mode, &maballslen);
 			if (res == 1) return 1;
 			continue;
 		}
 		else if (mode == M_ASCII) {
-			uint8_t chr = getc(stdin);
-			if (chr == 27) chr = 0;
-			int res = insert_char(chr, &pos, &r, &maballs, &line, &mode);
+			int8_t chr = getc(stdin);
+			if (chr == EOF) continue;
+			int res = insert_char(chr, &pos, &r, &maballs, &line, &mode, &maballslen);
 			if (res == 1) return 1;
 			continue;
 		}
@@ -204,11 +216,16 @@ int main(int argc, char **argv) {
 
 		switch (c) {
 		case 'i': {
-			char *cur_line_addr = addressma(maballs, line);
-			if (cur_line_addr == NULL) {
+			if (line != 1) {
+				char *cur_line_addr = addressma(maballs, line);
+				if (cur_line_addr == NULL) {
+					pos = 0;
+				}
+				pos = cur_line_addr - maballs;
+			}
+			else {
 				pos = 0;
 			}
-			pos = cur_line_addr - maballs;
 			printf("MODE :: INSERT\n");
 			mode = M_INSERT;
 			break;
@@ -234,13 +251,15 @@ int main(int argc, char **argv) {
 			if (file == NULL) {
 				printf("Couldn't open file for whatever reason.\n");
 			}
-			int bwritten = fprintf(file, "%s", maballs);
+			int bwritten = fprintf(file, "%*s", (int) maballslen, maballs);
 			printf("%s %dB\n", argv[1], bwritten);
 			fclose(file);
 			break;
 		case 'a': {
-			int result = nextline(maballs, &pos, &line);
-			if (result == 0) line--;
+			if (line != 0) {
+				int result = nextline(maballs, &pos, &line);
+				if (result == 0) line--;
+			}
 			printf("MODE :: INSERT\n");
 			mode = M_INSERT;
 			break;
